@@ -1,6 +1,6 @@
 # Blacklister IP
 
-Application Windows portable pour générer les commandes CLI de blocage d'IP/FQDN sur Palo Alto, Fortinet et Cisco ASA, avec historique local et détection de doublons. Remplace le processus manuel Excel/PowerShell dans `ancienne_methode/`.
+Application Windows portable pour générer les commandes CLI de blocage d'IP/FQDN sur Palo Alto, Fortinet et Cisco ASA, avec historique local et détection de doublons.
 
 ## Utilisation (développement)
 
