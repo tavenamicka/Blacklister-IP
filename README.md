@@ -9,7 +9,7 @@ pip install -r requirements.txt
 python app/main.py
 ```
 
-1. Onglet **Cas** : créer ou sélectionner un cas (ex: "iTrust"), cocher les pare-feu cibles, coller une liste d'IP/CIDR/FQDN (une par ligne), cliquer **Générer**.
+1. Onglet **Cas** : créer ou sélectionner un cas (ex: "iTrust"), cocher les pare-feu cibles, coller une liste d'IP/CIDR/FQDN (une par ligne), cliquer **Générer**. Chaque cas définit un préfixe pour les objets réseau et, si besoin, un préfixe de groupe différent (par défaut identique au préfixe des objets).
 2. Vérifier les commandes générées, les doublons (dans le cas ou dans un autre cas) et les valeurs invalides.
 3. **Copier** ou **Exporter .txt** les commandes, puis **Enregistrer** pour les ajouter à l'historique du cas.
 4. Onglet **Historique** : rechercher/filtrer toutes les entrées bloquées, exporter en CSV.
