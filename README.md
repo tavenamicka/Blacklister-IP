@@ -4,6 +4,14 @@
 
 Application Windows portable pour générer les commandes CLI de blocage d'IP/FQDN sur Palo Alto, Fortinet et Cisco ASA, avec historique local et détection de doublons.
 
+## À quoi ça sert
+
+En réponse à incident, bloquer une IP malveillante veut souvent dire l'écrire à la main sur plusieurs pare-feu — chacun avec sa propre syntaxe (Palo Alto ≠ Fortinet ≠ Cisco ASA). C'est lent et source d'erreurs (CIDR mal formé, doublon entre deux cas...).
+
+Blacklister IP automatise ça : on colle une liste d'IP/CIDR/FQDN, on coche les pare-feu cibles, l'appli génère les commandes prêtes à coller, valide les entrées et détecte les doublons. Les blocages sont organisés par **cas** (ex. un client ou un incident), avec un historique local consultable et exportable en CSV.
+
+Portable (un `.exe` + un dossier `data/`), aucune installation requise.
+
 ## Utilisation (développement)
 
 ```bash
