@@ -18,6 +18,18 @@ def test_palo_alto_cidr_and_fqdn():
     assert "set address P_example.com fqdn example.com" in out
 
 
+def test_palo_alto_shared_vsys():
+    out = palo_alto.generate("P", "P", _values("1.2.3.4"), vsys="shared")
+    assert "set shared address P_1.2.3.4 ip-netmask 1.2.3.4/32" in out
+    assert "set shared address-group P static P_1.2.3.4" in out
+
+
+def test_palo_alto_named_vsys():
+    out = palo_alto.generate("P", "P", _values("1.2.3.4"), vsys="vsys1")
+    assert "set vsys vsys1 address P_1.2.3.4 ip-netmask 1.2.3.4/32" in out
+    assert "set vsys vsys1 address-group P static P_1.2.3.4" in out
+
+
 def test_fortinet_cidr_uses_netmask():
     out = fortinet.generate("P", "P", _values("10.0.0.0/24"))
     assert "set subnet 10.0.0.0 255.255.255.0" in out

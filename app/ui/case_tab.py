@@ -13,6 +13,7 @@ from ui import theme
 
 _SLUG_RE = re.compile(r"[^A-Za-z0-9]+")
 _PREFIX_RE = re.compile(r"^[A-Za-z0-9_.-]+$")
+_VSYS_NAME_RE = re.compile(r"^[A-Za-z0-9_.-]+$")
 
 
 def _default_prefix(name: str) -> str:
@@ -258,15 +259,35 @@ class CaseTab(ctk.CTkFrame):
 
         fw_frame = ctk.CTkFrame(self, fg_color="transparent")
         fw_frame.pack(fill="x", padx=16, pady=4)
+        self._fw_frame = fw_frame
         ctk.CTkLabel(fw_frame, text="Pare-feu :", text_color=theme.MUTED, font=theme.font_body(13)).pack(
             side="left"
         )
         for fw in FIREWALLS:
             var = ctk.BooleanVar(value=True)
             self.fw_vars[fw] = var
-            ctk.CTkCheckBox(fw_frame, text=FIREWALL_LABELS[fw], variable=var, **theme.checkbox_style()).pack(
-                side="left", padx=8
-            )
+            command = self._update_palo_vsys_visibility if fw == "palo_alto" else None
+            ctk.CTkCheckBox(
+                fw_frame, text=FIREWALL_LABELS[fw], variable=var, command=command, **theme.checkbox_style()
+            ).pack(side="left", padx=8)
+
+        # Options vsys Palo Alto : n'apparaissent que si "Palo Alto" est cochée. Objets et
+        # address-group doivent partager le même scope (shared ou même vsys), cf. palo_alto.generate().
+        self.palo_vsys_frame = ctk.CTkFrame(self, fg_color="transparent")
+        self.palo_vsys_enabled_var = ctk.BooleanVar(value=False)
+        ctk.CTkCheckBox(
+            self.palo_vsys_frame, text="Multi-vsys", variable=self.palo_vsys_enabled_var,
+            command=self._update_palo_vsys_visibility, **theme.checkbox_style(),
+        ).pack(side="left", padx=(24, 8))
+        self.palo_vsys_mode_menu = ctk.CTkOptionMenu(
+            self.palo_vsys_frame, values=["shared", "vsys nommé"], command=self._on_palo_vsys_mode_changed,
+            width=130, **theme.option_menu_style(),
+        )
+        self.palo_vsys_mode_menu.pack(side="left")
+        self.palo_vsys_name_entry = ctk.CTkEntry(
+            self.palo_vsys_frame, placeholder_text="ex: vsys1", width=100, **theme.entry_style()
+        )
+        self._update_palo_vsys_visibility()
 
         ctk.CTkLabel(
             self, text="IP / CIDR / FQDN à bloquer (une par ligne)", text_color=theme.MUTED, font=theme.font_body(12)
@@ -303,6 +324,38 @@ class CaseTab(ctk.CTkFrame):
 
     def _on_case_selected(self, value: str):
         self.current_case = self._cases_by_name.get(value)
+
+    def _update_palo_vsys_visibility(self):
+        palo_selected = self.fw_vars["palo_alto"].get()
+        if palo_selected:
+            self.palo_vsys_frame.pack(fill="x", padx=16, after=self._fw_frame)
+        else:
+            self.palo_vsys_enabled_var.set(False)
+            self.palo_vsys_frame.pack_forget()
+        enabled = palo_selected and self.palo_vsys_enabled_var.get()
+        self.palo_vsys_mode_menu.configure(state="normal" if enabled else "disabled")
+        self._on_palo_vsys_mode_changed(self.palo_vsys_mode_menu.get() if enabled else "shared")
+
+    def _on_palo_vsys_mode_changed(self, mode: str):
+        enabled = self.fw_vars["palo_alto"].get() and self.palo_vsys_enabled_var.get()
+        if enabled and mode == "vsys nommé":
+            self.palo_vsys_name_entry.pack(side="left", padx=(8, 0))
+            self.palo_vsys_name_entry.configure(state="normal")
+        else:
+            self.palo_vsys_name_entry.pack_forget()
+
+    def _palo_alto_vsys_value(self) -> str | None:
+        """Scope PAN-OS à utiliser pour Palo Alto (None = pas de préfixe, mono-vsys)."""
+        if not self.palo_vsys_enabled_var.get():
+            return None
+        if self.palo_vsys_mode_menu.get() == "shared":
+            return "shared"
+        name = self.palo_vsys_name_entry.get().strip() or "vsys1"
+        if not _VSYS_NAME_RE.match(name):
+            raise ValueError(
+                "Nom de vsys invalide : lettres, chiffres, '_', '.', '-' uniquement (pas d'espace)."
+            )
+        return name
 
     def _new_case(self):
         dialog = CaseDialog(self)
@@ -360,12 +413,19 @@ class CaseTab(ctk.CTkFrame):
             messagebox.showwarning("Blacklister IP", "Collez au moins une IP/FQDN.")
             return
 
+        try:
+            palo_alto_vsys = self._palo_alto_vsys_value()
+        except ValueError as exc:
+            messagebox.showwarning("Blacklister IP", str(exc))
+            return
+
         for panel in self.result_panels:
             panel.destroy()
         self.result_panels.clear()
 
         for fw in selected_fw:
-            result = blocker.process(self.current_case, fw, raw_text)
+            kwargs = {"palo_alto_vsys": palo_alto_vsys} if fw == "palo_alto" else {}
+            result = blocker.process(self.current_case, fw, raw_text, **kwargs)
             panel = FirewallResultPanel(self.results_scroll, self.current_case, result, on_saved=self._on_saved)
             panel.pack(fill="x", pady=(0, 10))
             self.result_panels.append(panel)
