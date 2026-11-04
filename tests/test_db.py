@@ -70,14 +70,14 @@ def test_count_entries_for_case(isolated_db):
 def test_archive_entry_marks_unblocked_and_excludes_from_active_dedup(isolated_db):
     case = isolated_db.create_case("Test", "IOC-case-Test")
     isolated_db.add_entries(case.id, "palo_alto", [("1.2.3.4", "1.2.3.4", False, "obj1")])
-    entry_id = isolated_db.list_history()[0]["entry_id"]
+    entry_id = isolated_db.list_history()[0].entry_id
 
     assert isolated_db.existing_normalized_for_case(case.id, "palo_alto") == {"1.2.3.4"}
 
     isolated_db.archive_entry(entry_id)
 
-    row = isolated_db.list_history()[0]
-    assert row["unblocked_at"] is not None
+    entry = isolated_db.list_history()[0]
+    assert entry.unblocked_at is not None
     # Une fois archivée, la valeur ne doit plus être vue comme "déjà bloquée" -> on peut la rebloquer.
     assert isolated_db.existing_normalized_for_case(case.id, "palo_alto") == set()
 
@@ -85,7 +85,7 @@ def test_archive_entry_marks_unblocked_and_excludes_from_active_dedup(isolated_d
 def test_reblock_after_archive_does_not_violate_unique_index(isolated_db):
     case = isolated_db.create_case("Test", "IOC-case-Test")
     isolated_db.add_entries(case.id, "palo_alto", [("1.2.3.4", "1.2.3.4", False, "obj1")])
-    entry_id = isolated_db.list_history()[0]["entry_id"]
+    entry_id = isolated_db.list_history()[0].entry_id
     isolated_db.archive_entry(entry_id)
 
     # Ne doit PAS lever IntegrityError malgré la même clé (case_id, firewall, normalized).
@@ -97,20 +97,58 @@ def test_reblock_after_archive_does_not_violate_unique_index(isolated_db):
 def test_unarchive_entry_restores_active_status(isolated_db):
     case = isolated_db.create_case("Test", "IOC-case-Test")
     isolated_db.add_entries(case.id, "palo_alto", [("1.2.3.4", "1.2.3.4", False, "obj1")])
-    entry_id = isolated_db.list_history()[0]["entry_id"]
+    entry_id = isolated_db.list_history()[0].entry_id
 
     isolated_db.archive_entry(entry_id)
     isolated_db.unarchive_entry(entry_id)
 
-    assert isolated_db.list_history()[0]["unblocked_at"] is None
+    assert isolated_db.list_history()[0].unblocked_at is None
 
 
 def test_delete_entry_removes_row(isolated_db):
     case = isolated_db.create_case("Test", "IOC-case-Test")
     isolated_db.add_entries(case.id, "palo_alto", [("1.2.3.4", "1.2.3.4", False, "obj1")])
-    entry_id = isolated_db.list_history()[0]["entry_id"]
+    entry_id = isolated_db.list_history()[0].entry_id
 
     isolated_db.delete_entry(entry_id)
+
+    assert isolated_db.list_history() == []
+
+
+def test_archive_entries_batches_in_one_transaction(isolated_db, monkeypatch):
+    case = isolated_db.create_case("Test", "IOC-case-Test")
+    isolated_db.add_entries(
+        case.id,
+        "palo_alto",
+        [("1.2.3.4", "1.2.3.4", False, "obj1"), ("5.6.7.8", "5.6.7.8", False, "obj2")],
+    )
+    ids = [r.entry_id for r in isolated_db.list_history()]
+
+    connect_calls = []
+    original_connect = isolated_db.sqlite3.connect
+
+    def counting_connect(*args, **kwargs):
+        connect_calls.append(1)
+        return original_connect(*args, **kwargs)
+
+    monkeypatch.setattr(isolated_db.sqlite3, "connect", counting_connect)
+
+    isolated_db.archive_entries(ids)
+
+    assert len(connect_calls) == 1
+    assert all(r.unblocked_at is not None for r in isolated_db.list_history())
+
+
+def test_delete_entries_removes_all_rows(isolated_db):
+    case = isolated_db.create_case("Test", "IOC-case-Test")
+    isolated_db.add_entries(
+        case.id,
+        "palo_alto",
+        [("1.2.3.4", "1.2.3.4", False, "obj1"), ("5.6.7.8", "5.6.7.8", False, "obj2")],
+    )
+    ids = [r.entry_id for r in isolated_db.list_history()]
+
+    isolated_db.delete_entries(ids)
 
     assert isolated_db.list_history() == []
 
@@ -123,9 +161,9 @@ def test_list_history_status_filter(isolated_db):
         [("1.2.3.4", "1.2.3.4", False, "obj1"), ("5.6.7.8", "5.6.7.8", False, "obj2")],
     )
     rows = isolated_db.list_history()
-    archived_id = next(r["entry_id"] for r in rows if r["value"] == "1.2.3.4")
+    archived_id = next(r.entry_id for r in rows if r.value == "1.2.3.4")
     isolated_db.archive_entry(archived_id)
 
-    assert {r["value"] for r in isolated_db.list_history(status="active")} == {"5.6.7.8"}
-    assert {r["value"] for r in isolated_db.list_history(status="archived")} == {"1.2.3.4"}
-    assert {r["value"] for r in isolated_db.list_history(status="all")} == {"1.2.3.4", "5.6.7.8"}
+    assert {r.value for r in isolated_db.list_history(status="active")} == {"5.6.7.8"}
+    assert {r.value for r in isolated_db.list_history(status="archived")} == {"1.2.3.4"}
+    assert {r.value for r in isolated_db.list_history(status="all")} == {"1.2.3.4", "5.6.7.8"}

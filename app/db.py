@@ -5,7 +5,6 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
 
 SCHEMA_VERSION = 3
 
@@ -159,7 +158,7 @@ def list_cases() -> list[Case]:
         return [Case(**dict(r)) for r in rows]
 
 
-def get_case(case_id: int) -> Optional[Case]:
+def get_case(case_id: int) -> Case | None:
     with get_conn() as conn:
         row = conn.execute("SELECT * FROM cases WHERE id = ?", (case_id,)).fetchone()
         return Case(**dict(row)) if row else None
@@ -252,7 +251,7 @@ def add_entries(case_id: int, firewall: str, items: list[tuple[str, str, bool, s
 
 
 def backup_to(dest_path: Path) -> None:
-    """Sauvegarde complète et cohérente de la base vers dest_path (API backup SQLite, pas une copie de fichier brute)."""
+    """Sauvegarde complète et cohérente de la base vers dest_path (API backup SQLite, pas une copie brute)."""
     with get_conn() as source:
         dest = sqlite3.connect(dest_path)
         try:
@@ -261,7 +260,18 @@ def backup_to(dest_path: Path) -> None:
             dest.close()
 
 
-def list_history(search: str = "", status: str = "all") -> list[sqlite3.Row]:
+@dataclass
+class HistoryEntry:
+    entry_id: int
+    case_name: str
+    firewall: str
+    value: str
+    is_fqdn: bool
+    created_at: str
+    unblocked_at: str | None
+
+
+def list_history(search: str = "", status: str = "all") -> list[HistoryEntry]:
     """status: 'all' | 'active' | 'archived'."""
     with get_conn() as conn:
         query = (
@@ -281,22 +291,42 @@ def list_history(search: str = "", status: str = "all") -> list[sqlite3.Row]:
         if clauses:
             query += " WHERE " + " AND ".join(clauses)
         query += " ORDER BY e.created_at DESC"
-        return conn.execute(query, params).fetchall()
+        rows = conn.execute(query, params).fetchall()
+        return [HistoryEntry(**{**dict(r), "is_fqdn": bool(r["is_fqdn"])}) for r in rows]
+
+
+def archive_entries(entry_ids: list[int]) -> None:
+    """Marque les entrées comme débloquées (ne les supprime pas : garde l'historique).
+    Tout le lot dans une seule transaction, pour une sélection multiple dans l'UI."""
+    if not entry_ids:
+        return
+    now = datetime.now().isoformat(timespec="seconds")
+    with get_conn() as conn:
+        conn.executemany("UPDATE entries SET unblocked_at = ? WHERE id = ?", [(now, eid) for eid in entry_ids])
 
 
 def archive_entry(entry_id: int) -> None:
-    """Marque l'entrée comme débloquée (ne la supprime pas : garde l'historique)."""
-    now = datetime.now().isoformat(timespec="seconds")
+    archive_entries([entry_id])
+
+
+def unarchive_entries(entry_ids: list[int]) -> None:
+    """Annule un archivage (remet les entrées actives) — utile en cas d'erreur de manipulation."""
+    if not entry_ids:
+        return
     with get_conn() as conn:
-        conn.execute("UPDATE entries SET unblocked_at = ? WHERE id = ?", (now, entry_id))
+        conn.executemany("UPDATE entries SET unblocked_at = NULL WHERE id = ?", [(eid,) for eid in entry_ids])
 
 
 def unarchive_entry(entry_id: int) -> None:
-    """Annule un archivage (remet l'entrée active) — utile en cas d'erreur de manipulation."""
+    unarchive_entries([entry_id])
+
+
+def delete_entries(entry_ids: list[int]) -> None:
+    if not entry_ids:
+        return
     with get_conn() as conn:
-        conn.execute("UPDATE entries SET unblocked_at = NULL WHERE id = ?", (entry_id,))
+        conn.executemany("DELETE FROM entries WHERE id = ?", [(eid,) for eid in entry_ids])
 
 
 def delete_entry(entry_id: int) -> None:
-    with get_conn() as conn:
-        conn.execute("DELETE FROM entries WHERE id = ?", (entry_id,))
+    delete_entries([entry_id])

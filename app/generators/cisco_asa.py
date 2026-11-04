@@ -1,8 +1,9 @@
 """Génération des commandes CLI Cisco ASA (reprend Gen_CMD_ListIP_ITRUST_NBR_V3.ps1)."""
-from typing import Iterable
+from collections.abc import Iterable
+
+from validators import ParsedValue
 
 from generators.base import netmask_from_prefix, object_name
-from validators import ParsedValue
 
 
 def generate(prefix: str, group_name: str, values: Iterable[ParsedValue]) -> str:

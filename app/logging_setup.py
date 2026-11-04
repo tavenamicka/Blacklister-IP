@@ -2,22 +2,28 @@
 import logging
 import sys
 import tkinter.messagebox as messagebox
+from logging.handlers import RotatingFileHandler
 
 from db import app_root
 
 LOGGER_NAME = "blacklister"
+MAX_LOG_BYTES = 1_000_000
+LOG_BACKUP_COUNT = 3
 
 
 def setup_logging() -> logging.Logger:
+    """Fichier tournant (1 Mo x 4) : évite qu'app.log grossisse sans limite sur une installation
+    utilisée longtemps, sans dépendre d'une rotation externe (l'app est portable, sans logrotate)."""
     log_dir = app_root() / "data"
     log_dir.mkdir(parents=True, exist_ok=True)
-    logging.basicConfig(
-        filename=log_dir / "app.log",
-        level=logging.INFO,
-        format="%(asctime)s %(levelname)s %(message)s",
-        encoding="utf-8",
+    handler = RotatingFileHandler(
+        log_dir / "app.log", maxBytes=MAX_LOG_BYTES, backupCount=LOG_BACKUP_COUNT, encoding="utf-8"
     )
-    return logging.getLogger(LOGGER_NAME)
+    handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(message)s"))
+    logger = logging.getLogger(LOGGER_NAME)
+    logger.setLevel(logging.INFO)
+    logger.addHandler(handler)
+    return logger
 
 
 def _log_and_notify(logger: logging.Logger, exc_type, exc_value, exc_tb) -> None:

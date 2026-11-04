@@ -7,9 +7,9 @@ from pathlib import Path
 from tkinter import ttk
 
 import customtkinter as ctk
-
 import db
 from db import FIREWALL_LABELS
+
 from ui import theme
 from ui.import_dialog import ImportDialog
 
@@ -56,8 +56,19 @@ def _install_tree_style() -> None:
     _TREE_STYLE_INSTALLED = True
 
 
-def _status_text(row) -> str:
-    return f"Débloquée le {row['unblocked_at']}" if row["unblocked_at"] else "Active"
+def _status_text(entry: db.HistoryEntry) -> str:
+    return f"Débloquée le {entry.unblocked_at}" if entry.unblocked_at else "Active"
+
+
+_CSV_FORMULA_PREFIXES = ("=", "+", "-", "@")
+
+
+def _csv_safe(value: str) -> str:
+    """Neutralise l'injection de formule (Excel/LibreOffice) : le nom de cas est en texte libre,
+    sans restriction de caractères, contrairement au préfixe."""
+    if value and value[0] in _CSV_FORMULA_PREFIXES:
+        return f"'{value}"
+    return value
 
 
 class StatTile(ctk.CTkFrame):
@@ -105,9 +116,9 @@ class HistoryTab(ctk.CTkFrame):
         )
         self.status_menu.set("Toutes")
         self.status_menu.pack(side="left", padx=8)
-        ctk.CTkButton(top, text="Importer...", width=100, command=self._open_import_dialog, **theme.btn_secondary()).pack(
-            side="left"
-        )
+        ctk.CTkButton(
+            top, text="Importer...", width=100, command=self._open_import_dialog, **theme.btn_secondary()
+        ).pack(side="left")
 
         actions = ctk.CTkFrame(self, fg_color="transparent")
         actions.pack(fill="x", padx=16, pady=(0, 10))
@@ -150,22 +161,22 @@ class HistoryTab(ctk.CTkFrame):
         self._search_after_id = None
         search = self.search_entry.get().strip()
         status = STATUS_FILTERS.get(self.status_menu.get(), "all")
-        rows = db.list_history(search, status)
+        entries = db.list_history(search, status)
         self.tree.delete(*self.tree.get_children())
-        for i, row in enumerate(rows):
-            type_label = "FQDN" if row["is_fqdn"] else "IP"
+        for i, entry in enumerate(entries):
+            type_label = "FQDN" if entry.is_fqdn else "IP"
             self.tree.insert(
                 "",
                 "end",
-                iid=str(row["entry_id"]),
+                iid=str(entry.entry_id),
                 tags=("even" if i % 2 == 0 else "odd",),
                 values=(
-                    row["case_name"],
-                    FIREWALL_LABELS.get(row["firewall"], row["firewall"]),
-                    row["value"],
+                    entry.case_name,
+                    FIREWALL_LABELS.get(entry.firewall, entry.firewall),
+                    entry.value,
                     type_label,
-                    _status_text(row),
-                    row["created_at"],
+                    _status_text(entry),
+                    entry.created_at,
                 ),
             )
 
@@ -188,8 +199,7 @@ class HistoryTab(ctk.CTkFrame):
         if not ids:
             messagebox.showwarning("Blacklister IP", "Sélectionnez une ou plusieurs lignes.")
             return
-        for entry_id in ids:
-            db.archive_entry(entry_id)
+        db.archive_entries(ids)
         self.refresh()
 
     def _unarchive_selected(self):
@@ -197,8 +207,7 @@ class HistoryTab(ctk.CTkFrame):
         if not ids:
             messagebox.showwarning("Blacklister IP", "Sélectionnez une ou plusieurs lignes.")
             return
-        for entry_id in ids:
-            db.unarchive_entry(entry_id)
+        db.unarchive_entries(ids)
         self.refresh()
 
     def _delete_selected(self):
@@ -210,8 +219,7 @@ class HistoryTab(ctk.CTkFrame):
             "Blacklister IP", f"Supprimer définitivement {len(ids)} entrée(s) de l'historique ?", icon="warning"
         ):
             return
-        for entry_id in ids:
-            db.delete_entry(entry_id)
+        db.delete_entries(ids)
         self.refresh()
 
     def _export_csv(self):
@@ -223,20 +231,20 @@ class HistoryTab(ctk.CTkFrame):
         if not path:
             return
         status = STATUS_FILTERS.get(self.status_menu.get(), "all")
-        rows = db.list_history(self.search_entry.get().strip(), status)
+        entries = db.list_history(self.search_entry.get().strip(), status)
         with open(path, "w", newline="", encoding="utf-8-sig") as f:
             writer = csv.writer(f, delimiter=";")
             writer.writerow(["Cas", "Pare-feu", "Valeur", "Type", "Statut", "Ajouté le"])
-            for row in rows:
-                type_label = "FQDN" if row["is_fqdn"] else "IP"
+            for entry in entries:
+                type_label = "FQDN" if entry.is_fqdn else "IP"
                 writer.writerow(
                     [
-                        row["case_name"],
-                        FIREWALL_LABELS.get(row["firewall"], row["firewall"]),
-                        row["value"],
+                        _csv_safe(entry.case_name),
+                        FIREWALL_LABELS.get(entry.firewall, entry.firewall),
+                        entry.value,
                         type_label,
-                        _status_text(row),
-                        row["created_at"],
+                        _status_text(entry),
+                        entry.created_at,
                     ]
                 )
 

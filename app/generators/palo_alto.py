@@ -1,11 +1,12 @@
 """Génération des commandes CLI Palo Alto (PAN-OS)."""
-from typing import Iterable, Optional
+from collections.abc import Iterable
 
-from generators.base import object_name
 from validators import ParsedValue
 
+from generators.base import object_name
 
-def generate(prefix: str, group_name: str, values: Iterable[ParsedValue], vsys: Optional[str] = None) -> str:
+
+def generate(prefix: str, group_name: str, values: Iterable[ParsedValue], vsys: str | None = None) -> str:
     """Génère les commandes `set address` / `set address-group`.
 
     `vsys` fixe le contexte PAN-OS quand le firewall a plusieurs vsys :

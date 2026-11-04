@@ -14,4 +14,8 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install -r requirements-dev.txt
-      - run: pytest -q
+      - run: ruff check .
+      # Xvfb : tests_case_tab_vsys.py instancie de vrais widgets CustomTkinter/Tk, qui ont besoin
+      # d'un display même en mode "headless" (le runner Gitea Actions n'en a pas par défaut).
+      - run: sudo apt-get update && sudo apt-get install -y xvfb
+      - run: xvfb-run -a pytest -q

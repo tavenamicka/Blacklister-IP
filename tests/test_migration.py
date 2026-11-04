@@ -57,8 +57,8 @@ def test_migration_preserves_cases_and_entries_and_adds_unblocked_at(tmp_path, m
 
     history = db.list_history()
     assert len(history) == 1
-    assert history[0]["value"] == "1.2.3.4"
-    assert history[0]["unblocked_at"] is None
+    assert history[0].value == "1.2.3.4"
+    assert history[0].unblocked_at is None
 
     assert cases[0].group_prefix == "IOC-case-iTrust"  # backfill = prefix pour les cas déjà créés
 

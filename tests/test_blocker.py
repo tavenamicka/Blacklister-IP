@@ -1,8 +1,7 @@
 import sqlite3
 
-import pytest
-
 import blocker
+import pytest
 
 
 def test_process_dedups_within_batch_and_flags_invalid(isolated_db):
@@ -30,6 +29,13 @@ def test_process_uses_distinct_group_prefix_for_group_name(isolated_db):
 
     assert "set address IOC-case-Test_1.2.3.4 ip-netmask 1.2.3.4/32" in result.commands
     assert "set address-group IOC-grp-Test static IOC-case-Test_1.2.3.4" in result.commands
+
+
+def test_process_forwards_options_to_generator(isolated_db):
+    case = isolated_db.create_case("Test", "IOC-case-Test")
+    result = blocker.process(case, "palo_alto", "1.2.3.4", options={"vsys": "shared"})
+
+    assert "set shared address IOC-case-Test_1.2.3.4 ip-netmask 1.2.3.4/32" in result.commands
 
 
 def test_cross_case_warning_does_not_block_new_case(isolated_db):
