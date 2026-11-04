@@ -1,0 +1,9 @@
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+
+[tool.ruff.lint]
+# E/F/W : pycodestyle + pyflakes (bugs, style de base). I : tri des imports. UP : syntaxe moderne
+# (ex. `X | None`). Pas de règles pylint/bandit/datetimez : trop strictes pour un outil interne
+# mono-développeur (ex. `except Exception: pass` dans logging_setup.py est volontaire).
+select = ["E", "F", "W", "I", "UP"]

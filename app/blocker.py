@@ -23,7 +23,7 @@ class FirewallResult:
     commands: str = ""
 
 
-def process(case: db.Case, firewall: str, raw_text: str, palo_alto_vsys: str | None = None) -> FirewallResult:
+def process(case: db.Case, firewall: str, raw_text: str, options: dict | None = None) -> FirewallResult:
     result = FirewallResult(firewall=firewall)
     parsed_list = parse_lines(raw_text)
 
@@ -51,10 +51,7 @@ def process(case: db.Case, firewall: str, raw_text: str, palo_alto_vsys: str | N
 
     group_name = case.group_prefix
     if result.new_values:
-        if firewall == "palo_alto":
-            result.commands = palo_alto.generate(case.prefix, group_name, result.new_values, vsys=palo_alto_vsys)
-        else:
-            result.commands = GENERATORS[firewall](case.prefix, group_name, result.new_values)
+        result.commands = GENERATORS[firewall](case.prefix, group_name, result.new_values, **(options or {}))
 
     return result
 

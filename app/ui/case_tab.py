@@ -4,11 +4,11 @@ import sqlite3
 import tkinter.filedialog as filedialog
 import tkinter.messagebox as messagebox
 
-import customtkinter as ctk
-
 import blocker
+import customtkinter as ctk
 import db
 from db import FIREWALL_LABELS, FIREWALLS
+
 from ui import theme
 
 _SLUG_RE = re.compile(r"[^A-Za-z0-9]+")
@@ -154,7 +154,9 @@ class FirewallResultPanel(ctk.CTkFrame):
             ).pack(anchor="w", padx=14, pady=(8, 0))
 
         if result.cross_case_warnings:
-            warn_text = "\n".join(f"⚠ {v} déjà bloquée sous le cas « {c} »" for v, c in result.cross_case_warnings)
+            warn_text = "\n".join(
+                f"⚠ {v} déjà bloquée sous le cas « {c} »" for v, c in result.cross_case_warnings
+            )
             ctk.CTkLabel(
                 self, text=warn_text, text_color=theme.WARNING, font=theme.font_body(12), justify="left"
             ).pack(anchor="w", padx=14, pady=(8, 0))
@@ -424,8 +426,8 @@ class CaseTab(ctk.CTkFrame):
         self.result_panels.clear()
 
         for fw in selected_fw:
-            kwargs = {"palo_alto_vsys": palo_alto_vsys} if fw == "palo_alto" else {}
-            result = blocker.process(self.current_case, fw, raw_text, **kwargs)
+            options = {"vsys": palo_alto_vsys} if fw == "palo_alto" else {}
+            result = blocker.process(self.current_case, fw, raw_text, options=options)
             panel = FirewallResultPanel(self.results_scroll, self.current_case, result, on_saved=self._on_saved)
             panel.pack(fill="x", pady=(0, 10))
             self.result_panels.append(panel)

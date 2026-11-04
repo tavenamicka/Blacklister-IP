@@ -4,9 +4,8 @@ from pathlib import Path
 APP_DIR = Path(__file__).resolve().parent.parent / "app"
 sys.path.insert(0, str(APP_DIR))
 
-import pytest  # noqa: E402
-
 import db  # noqa: E402
+import pytest  # noqa: E402
 
 
 @pytest.fixture

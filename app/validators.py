@@ -1,7 +1,6 @@
 """Validation et classification des valeurs saisies (IPv4/CIDR ou FQDN)."""
 import re
 from dataclasses import dataclass
-from typing import Optional
 
 _IPV4_OCTET = r"(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)"
 IPV4_RE = re.compile(rf"^{_IPV4_OCTET}(?:\.{_IPV4_OCTET}){{3}}$")
@@ -16,8 +15,8 @@ FQDN_RE = re.compile(
 class ParsedValue:
     raw: str
     kind: str  # "ip" | "fqdn" | "invalid"
-    ip: Optional[str] = None
-    prefix_len: Optional[int] = None
+    ip: str | None = None
+    prefix_len: int | None = None
 
     @property
     def normalized(self) -> str:
@@ -60,5 +59,5 @@ def parse_value(raw: str) -> ParsedValue:
 
 
 def parse_lines(text: str) -> list[ParsedValue]:
-    lines = [l.strip() for l in text.splitlines()]
-    return [parse_value(l) for l in lines if l.strip()]
+    lines = [line.strip() for line in text.splitlines()]
+    return [parse_value(line) for line in lines if line.strip()]

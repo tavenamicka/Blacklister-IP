@@ -3,11 +3,11 @@ mais sans génération de commandes CLI (sert à enregistrer des blocages déjà
 import tkinter.filedialog as filedialog
 import tkinter.messagebox as messagebox
 
-import customtkinter as ctk
-
 import blocker
+import customtkinter as ctk
 import db
 from db import FIREWALL_LABELS, FIREWALLS
+
 from ui import theme
 
 

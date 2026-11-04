@@ -43,7 +43,11 @@ Couvre la validation (`validators.py`), la génération de commandes par pare-fe
 
 ## Logs
 
-Toute exception non gérée (démarrage ou callback d'interface) est enregistrée dans `data/app.log` et affichée dans une boîte de dialogue — utile car l'exe est construit en mode `--windowed` (pas de console visible).
+Toute exception non gérée (démarrage ou callback d'interface) est enregistrée dans `data/app.log` (fichier tournant, 1 Mo x 4) et affichée dans une boîte de dialogue — utile car l'exe est construit en mode `--windowed` (pas de console visible).
+
+## Données
+
+`data/blacklister.db` n'est pas chiffrée : toute personne ayant accès au poste ou à l'exe portable (clé USB, poste partagé) peut la lire, y compris les noms de cas. À garder en tête si un cas référence un client/incident sensible.
 
 ## Structure
 
