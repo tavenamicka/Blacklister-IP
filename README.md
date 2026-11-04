@@ -58,3 +58,7 @@ Toute exception non gérée (démarrage ou callback d'interface) est enregistré
 - `app/ui/` — interface CustomTkinter
 - `app/logging_setup.py` — logging fichier + capture des exceptions non gérées
 - `tests/` — suite de tests pytest
+
+## Licence
+
+MIT — voir [LICENSE](LICENSE).
