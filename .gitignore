@@ -5,3 +5,4 @@ dist/
 *.spec
 data/
 .pytest_cache/
+app/_build_info.py

@@ -1,7 +1,9 @@
 """Fenêtre principale : onglets Cas / Historique."""
+import app_info
 import customtkinter as ctk
 
 from ui import theme
+from ui.about_dialog import AboutDialog
 from ui.case_tab import CaseTab
 from ui.devices_tab import DevicesTab
 from ui.history_tab import HistoryTab
@@ -14,6 +16,15 @@ class MainWindow(ctk.CTk):
         self.geometry("840x740")
         self.minsize(700, 580)
         self.configure(fg_color=theme.BG)
+
+        status_bar = ctk.CTkFrame(self, fg_color="transparent", height=24)
+        status_bar.pack(fill="x", side="bottom", padx=16, pady=(0, 8))
+        self.version_label = ctk.CTkLabel(
+            status_bar, text=app_info.get_version(), text_color=theme.MUTED, font=theme.font_body(11),
+            cursor="hand2",
+        )
+        self.version_label.pack(side="right")
+        self.version_label.bind("<Button-1>", lambda e: self._open_about())
 
         tabview = ctk.CTkTabview(
             self,
@@ -57,3 +68,6 @@ class MainWindow(ctk.CTk):
             self.case_tab.refresh_devices()
         elif current == "Historique":
             self.history_tab.refresh()
+
+    def _open_about(self):
+        AboutDialog(self)
