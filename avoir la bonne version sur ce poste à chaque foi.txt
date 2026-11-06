@@ -1,0 +1,4 @@
+Pour avoir la bonne version sur ce poste à chaque fois (résumé de la procédure) :
+
+git pull origin main
+./build.ps1
