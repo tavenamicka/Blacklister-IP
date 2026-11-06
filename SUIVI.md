@@ -5,8 +5,26 @@
 
 ---
 
-Mise à jour : 2026-11-06 (**Registre de pare-feu physiques (multi-pôle/site) + accès SSH**, non
-commité. Besoin métier : plusieurs pare-feu dans plusieurs pôles (ex. Paris/Bordeaux) avec des
+Mise à jour : 2026-11-06 (**Page « À propos » (version/date de build/auteur)**, commit `6371a7f`.
+Tag `v1.0.0` créé sur le commit précédent (`635df72`) — première version taguée du projet.
+- Barre d'état en bas de la fenêtre principale, visible sur tous les onglets : version cliquable
+  (`app/ui/main_window.py`), ouvrant la fenêtre **À propos** (`app/ui/about_dialog.py`) — nom,
+  version, date de build, auteur, contact, copyright.
+- `app/app_info.py` : version = `git describe --tags --always --dirty` (`vX.Y.Z` propre sur un tag,
+  `-dirty` si modifs non commitées, `-N-g<hash>` si N commits après le tag). Lue depuis
+  `app/_build_info.py` quand il existe (généré par `build.ps1` avant l'appel à PyInstaller, figé au
+  moment du build, embarqué par PyInstaller comme un module normal — gitignored, pas de
+  `--add-data` nécessaire) ; sinon (dev, `python app/main.py` sans build) recalculée à la volée
+  depuis git, date de build affichée comme « non buildé (mode développement) ».
+- `build.ps1 -Clean` supprime aussi `app/_build_info.py` en plus de `build/`/`dist/`/`__pycache__`.
+
+Vérifié : suite pytest (76/76, `_build_info` simulé via `sys.modules` pour couvrir les deux modes
+sans dépendre d'un vrai build), lancement réel en dev (`dev` affiché sans tag/`.git` accessible,
+`vX.Y.Z-dirty`/`-N-g<hash>` corrects avec le vrai dépôt), build réel (`./build.ps1` régénère
+`_build_info.py` avec la version/date figées, exe relancé sans exception). `ruff check` propre.)
+
+Mise à jour : 2026-11-06 (**Registre de pare-feu physiques (multi-pôle/site) + accès SSH**, commit
+`635df72`. Besoin métier : plusieurs pare-feu dans plusieurs pôles (ex. Paris/Bordeaux) avec des
 conventions de nommage et des accès SSH propres à chacun (pas d'API possible sur ces équipements) —
 voir aussi `README.md`.
 - Nouvel onglet **Pare-feu** : registre `devices` (migration schéma **v3→v4**) — site/pôle, nom,

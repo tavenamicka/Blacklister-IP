@@ -56,6 +56,10 @@ Toute exception non gérée (démarrage ou callback d'interface) est enregistré
 
 Login et mot de passe sont ressaisis à chaque connexion et jamais écrits sur disque (seul le login est retenu en mémoire pour la durée de la session, pour éviter de le retaper à chaque device). Le push automatique (`paramiko`) accepte la clé d'hôte SSH présentée sans la comparer à un `known_hosts` existant (`AutoAddPolicy`) — adapté à un usage interne sur un réseau de confiance, pas à une connexion via un réseau non maîtrisé.
 
+## Version / À propos
+
+La version affichée (bas de la fenêtre, cliquable) vient de `git describe --tags --always --dirty` : `vX.Y.Z` sur un commit tagué propre, `vX.Y.Z-dirty` s'il reste des modifications non commitées, `vX.Y.Z-N-g<hash>` si on est N commits après le dernier tag. Pour une version propre après un push, tagger le commit (`git tag -a vX.Y.Z -m "..."`, puis `git push origin vX.Y.Z`) avant de relancer `./build.ps1` — qui fige version + date de build dans l'exe au moment du build (`app/_build_info.py`, généré, non versionné). En dev (`python app/main.py`), la version est recalculée à la volée et la date de build affiche « non buildé ».
+
 ## Structure
 
 - `app/validators.py` — validation/normalisation IPv4, CIDR, FQDN
@@ -63,7 +67,8 @@ Login et mot de passe sont ressaisis à chaque connexion et jamais écrits sur d
 - `app/blocker.py` — dédup intra/inter-cas (scopée par device) + orchestration des générateurs
 - `app/generators/` — un module par marque de pare-feu
 - `app/ssh_client.py` — terminal SSH pré-rempli et push des commandes (paramiko), sans identifiants stockés
-- `app/ui/` — interface CustomTkinter (dont `devices_tab.py` et `ssh_dialogs.py`)
+- `app/app_info.py` — version (git) / date de build pour l'écran « À propos »
+- `app/ui/` — interface CustomTkinter (dont `devices_tab.py`, `ssh_dialogs.py` et `about_dialog.py`)
 - `app/logging_setup.py` — logging fichier + capture des exceptions non gérées
 - `tests/` — suite de tests pytest
 
