@@ -10,6 +10,7 @@ import db
 from db import FIREWALL_LABELS, FIREWALLS
 
 from ui import theme
+from ui.ssh_dialogs import SSHPushDialog, open_terminal_flow
 
 _SLUG_RE = re.compile(r"[^A-Za-z0-9]+")
 _PREFIX_RE = re.compile(r"^[A-Za-z0-9_.-]+$")
@@ -135,8 +136,11 @@ class FirewallResultPanel(ctk.CTkFrame):
 
         header = ctk.CTkFrame(self, fg_color="transparent")
         header.pack(fill="x", padx=14, pady=(12, 0))
+        title = FIREWALL_LABELS[result.firewall]
+        if result.device:
+            title += f" — {result.device.name} ({result.device.site})"
         ctk.CTkLabel(
-            header, text=FIREWALL_LABELS[result.firewall], text_color=theme.TEXT, font=theme.font_heading(14),
+            header, text=title, text_color=theme.TEXT, font=theme.font_heading(14),
         ).pack(side="left")
         ctk.CTkLabel(
             header, text=self._summary(result), text_color=theme.MUTED, font=theme.font_body(12),
@@ -188,6 +192,15 @@ class FirewallResultPanel(ctk.CTkFrame):
             ctk.CTkButton(
                 action_frame, text="Exporter .txt", width=112, command=self._export, **theme.btn_secondary()
             ).pack(side="left", padx=8)
+            if result.device:
+                ctk.CTkButton(
+                    action_frame, text="Terminal SSH", width=110, command=self._open_terminal,
+                    **theme.btn_secondary(),
+                ).pack(side="left", padx=(0, 8))
+                ctk.CTkButton(
+                    action_frame, text="Envoyer via SSH", width=130, command=self._send_ssh,
+                    **theme.btn_secondary(),
+                ).pack(side="left")
             self.save_btn = ctk.CTkButton(
                 action_frame, text=f"Enregistrer ({len(result.new_values)})", command=self._save,
                 **theme.btn_primary(),
@@ -215,17 +228,24 @@ class FirewallResultPanel(ctk.CTkFrame):
         self.clipboard_append(self.result.commands)
 
     def _export(self):
+        suffix = f"_{self.result.device.name}" if self.result.device else ""
         path = filedialog.asksaveasfilename(
             defaultextension=".txt",
-            initialfile=f"Commandes_{self.case.name}_{self.result.firewall}.txt",
+            initialfile=f"Commandes_{self.case.name}_{self.result.firewall}{suffix}.txt",
             filetypes=[("Fichier texte", "*.txt")],
         )
         if path:
             with open(path, "w", encoding="utf-8") as f:
                 f.write(self.result.commands)
 
+    def _open_terminal(self):
+        open_terminal_flow(self, self.result.device)
+
+    def _send_ssh(self):
+        SSHPushDialog(self, self.result.device, self.result.commands)
+
     def _save(self):
-        blocker.save(self.case, self.result.firewall, self.result.new_values)
+        blocker.save(self.case, self.result.firewall, self.result.new_values, device=self.result.device)
         if self.save_btn:
             self.save_btn.configure(
                 text="Enregistré ✓", state="disabled",
@@ -240,6 +260,8 @@ class CaseTab(ctk.CTkFrame):
         self.on_data_changed = on_data_changed
         self.current_case: db.Case | None = None
         self.fw_vars: dict[str, ctk.BooleanVar] = {}
+        self.device_vars: dict[int, ctk.BooleanVar] = {}
+        self._devices_by_id: dict[int, db.Device] = {}
         self.result_panels: list[FirewallResultPanel] = []
 
         top = ctk.CTkFrame(self, fg_color="transparent")
@@ -268,13 +290,20 @@ class CaseTab(ctk.CTkFrame):
         for fw in FIREWALLS:
             var = ctk.BooleanVar(value=True)
             self.fw_vars[fw] = var
-            command = self._update_palo_vsys_visibility if fw == "palo_alto" else None
             ctk.CTkCheckBox(
-                fw_frame, text=FIREWALL_LABELS[fw], variable=var, command=command, **theme.checkbox_style()
+                fw_frame, text=FIREWALL_LABELS[fw], variable=var,
+                command=lambda fw=fw: self._on_fw_toggled(fw), **theme.checkbox_style(),
             ).pack(side="left", padx=8)
 
-        # Options vsys Palo Alto : n'apparaissent que si "Palo Alto" est cochée. Objets et
-        # address-group doivent partager le même scope (shared ou même vsys), cf. palo_alto.generate().
+        # Devices précis (registre "Pare-feu"), par marque — un cas peut cibler Paris ET Bordeaux
+        # séparément. Si aucun device n'est coché pour une marque, on retombe sur le mode générique
+        # historique (une seule génération pour la marque, sans device précis).
+        self.devices_frame = ctk.CTkFrame(self, fg_color="transparent")
+        self.devices_frame.pack(fill="x", padx=16, pady=(0, 2), after=fw_frame)
+
+        # Options vsys Palo Alto génériques : n'apparaissent que si "Palo Alto" est cochée et
+        # qu'aucun device Palo Alto précis n'est sélectionné (son vsys vient alors du registre).
+        # Objets et address-group doivent partager le même scope, cf. palo_alto.generate().
         self.palo_vsys_frame = ctk.CTkFrame(self, fg_color="transparent")
         self.palo_vsys_enabled_var = ctk.BooleanVar(value=False)
         ctk.CTkCheckBox(
@@ -289,6 +318,7 @@ class CaseTab(ctk.CTkFrame):
         self.palo_vsys_name_entry = ctk.CTkEntry(
             self.palo_vsys_frame, placeholder_text="ex: vsys1", width=100, **theme.entry_style()
         )
+        self.refresh_devices()
         self._update_palo_vsys_visibility()
 
         ctk.CTkLabel(
@@ -327,10 +357,51 @@ class CaseTab(ctk.CTkFrame):
     def _on_case_selected(self, value: str):
         self.current_case = self._cases_by_name.get(value)
 
+    def refresh_devices(self):
+        """Reconstruit les cases à cocher par device, groupées par marque cochée. À appeler à
+        chaque fois que le registre 'Pare-feu' a pu changer (bascule d'onglet) ou qu'une marque
+        est (dé)cochée."""
+        for child in self.devices_frame.winfo_children():
+            child.destroy()
+        self.device_vars.clear()
+        self._devices_by_id.clear()
+
+        devices_by_fw: dict[str, list[db.Device]] = {}
+        for dev in db.list_devices():
+            self._devices_by_id[dev.id] = dev
+            devices_by_fw.setdefault(dev.firewall, []).append(dev)
+
+        for fw in FIREWALLS:
+            devices = devices_by_fw.get(fw, [])
+            if not devices or not self.fw_vars[fw].get():
+                continue
+            row = ctk.CTkFrame(self.devices_frame, fg_color="transparent")
+            row.pack(fill="x", pady=(2, 0))
+            ctk.CTkLabel(
+                row, text=f"{FIREWALL_LABELS[fw]} :", text_color=theme.MUTED, font=theme.font_body(11),
+            ).pack(side="left", padx=(24, 6))
+            for dev in devices:
+                var = ctk.BooleanVar(value=False)
+                self.device_vars[dev.id] = var
+                ctk.CTkCheckBox(
+                    row, text=f"{dev.name} ({dev.site})", variable=var,
+                    command=self._update_palo_vsys_visibility, **theme.checkbox_style(font=theme.font_body(11)),
+                ).pack(side="left", padx=4)
+
+    def _on_fw_toggled(self, fw: str):
+        self.refresh_devices()
+        self._update_palo_vsys_visibility()
+
+    def _any_palo_device_selected(self) -> bool:
+        return any(
+            var.get() for did, var in self.device_vars.items()
+            if self._devices_by_id.get(did) and self._devices_by_id[did].firewall == "palo_alto"
+        )
+
     def _update_palo_vsys_visibility(self):
-        palo_selected = self.fw_vars["palo_alto"].get()
+        palo_selected = self.fw_vars["palo_alto"].get() and not self._any_palo_device_selected()
         if palo_selected:
-            self.palo_vsys_frame.pack(fill="x", padx=16, after=self._fw_frame)
+            self.palo_vsys_frame.pack(fill="x", padx=16, after=self.devices_frame)
         else:
             self.palo_vsys_enabled_var.set(False)
             self.palo_vsys_frame.pack_forget()
@@ -339,7 +410,8 @@ class CaseTab(ctk.CTkFrame):
         self._on_palo_vsys_mode_changed(self.palo_vsys_mode_menu.get() if enabled else "shared")
 
     def _on_palo_vsys_mode_changed(self, mode: str):
-        enabled = self.fw_vars["palo_alto"].get() and self.palo_vsys_enabled_var.get()
+        palo_selected = self.fw_vars["palo_alto"].get() and not self._any_palo_device_selected()
+        enabled = palo_selected and self.palo_vsys_enabled_var.get()
         if enabled and mode == "vsys nommé":
             self.palo_vsys_name_entry.pack(side="left", padx=(8, 0))
             self.palo_vsys_name_entry.configure(state="normal")
@@ -421,13 +493,27 @@ class CaseTab(ctk.CTkFrame):
             messagebox.showwarning("Blacklister IP", str(exc))
             return
 
+        # Par marque cochée : un device précis coché -> une génération par device coché (préfixes/
+        # options du registre) ; aucun device coché -> mode générique historique (un seul résultat
+        # pour la marque, options saisies à la main ci-dessus).
+        targets: list[tuple[str, db.Device | None]] = []
+        for fw in selected_fw:
+            ticked_devices = [
+                self._devices_by_id[did] for did, var in self.device_vars.items()
+                if var.get() and self._devices_by_id[did].firewall == fw
+            ]
+            if ticked_devices:
+                targets.extend((fw, device) for device in ticked_devices)
+            else:
+                targets.append((fw, None))
+
         for panel in self.result_panels:
             panel.destroy()
         self.result_panels.clear()
 
-        for fw in selected_fw:
-            options = {"vsys": palo_alto_vsys} if fw == "palo_alto" else {}
-            result = blocker.process(self.current_case, fw, raw_text, options=options)
+        for fw, device in targets:
+            options = {"vsys": palo_alto_vsys} if fw == "palo_alto" and device is None else {}
+            result = blocker.process(self.current_case, fw, raw_text, device=device, options=options)
             panel = FirewallResultPanel(self.results_scroll, self.current_case, result, on_saved=self._on_saved)
             panel.pack(fill="x", pady=(0, 10))
             self.result_panels.append(panel)

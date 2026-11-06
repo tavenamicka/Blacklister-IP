@@ -74,3 +74,56 @@ def test_db_unique_constraint_blocks_direct_duplicate(isolated_db):
 
     with pytest.raises(sqlite3.IntegrityError):
         isolated_db.add_entries(case.id, "palo_alto", [("1.2.3.4", "1.2.3.4", False, "obj2")])
+
+
+def test_process_uses_device_prefixes_and_extra_options(isolated_db):
+    case = isolated_db.create_case("Test", "IOC-case-Test")
+    device = isolated_db.create_device(
+        "Paris", "FW-PAR", "palo_alto", "10.1.0.1", object_prefix="IOC-PAR", group_prefix="IOC-PAR-GRP",
+        extra_options='{"vsys": "shared"}',
+    )
+
+    result = blocker.process(case, "palo_alto", "1.2.3.4", device=device)
+
+    assert "set shared address IOC-PAR_1.2.3.4 ip-netmask 1.2.3.4/32" in result.commands
+    assert "set shared address-group IOC-PAR-GRP static IOC-PAR_1.2.3.4" in result.commands
+    assert result.device == device
+
+
+def test_process_falls_back_to_case_prefix_when_device_has_none(isolated_db):
+    case = isolated_db.create_case("Test", "IOC-case-Test")
+    device = isolated_db.create_device("Paris", "FW-PAR", "palo_alto", "10.1.0.1")
+
+    result = blocker.process(case, "palo_alto", "1.2.3.4", device=device)
+
+    assert "set address IOC-case-Test_1.2.3.4 ip-netmask 1.2.3.4/32" in result.commands
+
+
+def test_dedup_is_scoped_per_device_not_just_per_firewall(isolated_db):
+    case = isolated_db.create_case("Test", "IOC-case-Test")
+    paris = isolated_db.create_device("Paris", "FW-PAR", "palo_alto", "10.1.0.1")
+    bordeaux = isolated_db.create_device("Bordeaux", "FW-BDX", "palo_alto", "10.2.0.1")
+
+    r1 = blocker.process(case, "palo_alto", "1.2.3.4", device=paris)
+    blocker.save(case, "palo_alto", r1.new_values, device=paris)
+
+    # Même IP, même cas, même marque, mais device différent -> pas un doublon.
+    r2 = blocker.process(case, "palo_alto", "1.2.3.4", device=bordeaux)
+    assert [v.raw for v in r2.new_values] == ["1.2.3.4"]
+    assert r2.duplicates_in_case == []
+
+    # Ressaisie sur le même device Paris -> bien détectée comme doublon.
+    r3 = blocker.process(case, "palo_alto", "1.2.3.4", device=paris)
+    assert r3.duplicates_in_case == ["1.2.3.4"]
+
+
+def test_save_persists_device_id_and_history_shows_device(isolated_db):
+    case = isolated_db.create_case("Test", "IOC-case-Test")
+    device = isolated_db.create_device("Paris", "FW-PAR", "palo_alto", "10.1.0.1")
+
+    result = blocker.process(case, "palo_alto", "1.2.3.4", device=device)
+    blocker.save(case, "palo_alto", result.new_values, device=device)
+
+    entry = isolated_db.list_history()[0]
+    assert entry.device_name == "FW-PAR"
+    assert entry.device_site == "Paris"

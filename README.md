@@ -10,6 +10,8 @@ En réponse à incident, bloquer une IP malveillante veut souvent dire l'écrire
 
 Blacklister IP automatise ça : on colle une liste d'IP/CIDR/FQDN, on coche les pare-feu cibles, l'appli génère les commandes prêtes à coller, valide les entrées et détecte les doublons. Les blocages sont organisés par **cas** (ex. un client ou un incident), avec un historique local consultable et exportable en CSV.
 
+Pour qui gère plusieurs pare-feu répartis sur plusieurs pôles/sites (ex. Paris, Bordeaux), un registre dédié (**onglet Pare-feu**) retient quel pare-feu appartient à quel pôle, avec ses préfixes propres et son accès SSH — ces équipements n'exposant pas d'API, l'appli ouvre un terminal SSH pré-rempli ou pousse directement les commandes générées (login/mot de passe jamais stockés, ressaisis à chaque connexion).
+
 Portable (un `.exe` + un dossier `data/`), aucune installation requise.
 
 ## Utilisation (développement)
@@ -19,10 +21,11 @@ pip install -r requirements.txt
 python app/main.py
 ```
 
-1. Onglet **Cas** : créer ou sélectionner un cas (ex: "iTrust"), cocher les pare-feu cibles, coller une liste d'IP/CIDR/FQDN (une par ligne), cliquer **Générer**. Chaque cas définit un préfixe pour les objets réseau et, si besoin, un préfixe de groupe différent (par défaut identique au préfixe des objets).
-2. Vérifier les commandes générées, les doublons (dans le cas ou dans un autre cas) et les valeurs invalides.
-3. **Copier** ou **Exporter .txt** les commandes, puis **Enregistrer** pour les ajouter à l'historique du cas.
-4. Onglet **Historique** : rechercher/filtrer toutes les entrées bloquées, exporter en CSV.
+1. Onglet **Pare-feu** (optionnel mais recommandé si plusieurs sites) : enregistrer chaque pare-feu physique — pôle/site, nom, marque, host + port SSH, préfixes propres et, pour Palo Alto, le vsys.
+2. Onglet **Cas** : créer ou sélectionner un cas (ex: "iTrust"), cocher les pare-feu cibles. Si des devices sont enregistrés pour une marque, cocher le(s) device(s) précis à cibler (ex: le Palo Alto de Paris ET celui de Bordeaux séparément) ; sans device coché, génération générique pour la marque (comportement historique).
+3. Coller une liste d'IP/CIDR/FQDN (une par ligne), cliquer **Générer**, vérifier les commandes, les doublons (dans le cas/device ou ailleurs) et les valeurs invalides.
+4. **Copier**, **Exporter .txt**, ou — pour un résultat ciblant un device — **Terminal SSH** (ouvre un terminal local déjà pointé sur ce device) ou **Envoyer via SSH** (écran de confirmation puis envoi direct des commandes). Puis **Enregistrer** pour les ajouter à l'historique.
+5. Onglet **Historique** : rechercher/filtrer toutes les entrées bloquées (pôle/device inclus), exporter en CSV.
 
 ## Build de l'exécutable portable
 
@@ -49,13 +52,18 @@ Toute exception non gérée (démarrage ou callback d'interface) est enregistré
 
 `data/blacklister.db` n'est pas chiffrée : toute personne ayant accès au poste ou à l'exe portable (clé USB, poste partagé) peut la lire, y compris les noms de cas. À garder en tête si un cas référence un client/incident sensible.
 
+## SSH
+
+Login et mot de passe sont ressaisis à chaque connexion et jamais écrits sur disque (seul le login est retenu en mémoire pour la durée de la session, pour éviter de le retaper à chaque device). Le push automatique (`paramiko`) accepte la clé d'hôte SSH présentée sans la comparer à un `known_hosts` existant (`AutoAddPolicy`) — adapté à un usage interne sur un réseau de confiance, pas à une connexion via un réseau non maîtrisé.
+
 ## Structure
 
 - `app/validators.py` — validation/normalisation IPv4, CIDR, FQDN
-- `app/db.py` — persistance SQLite (cas, entrées bloquées)
-- `app/blocker.py` — dédup intra/inter-cas + orchestration des générateurs
+- `app/db.py` — persistance SQLite (cas, pare-feu physiques/`devices`, entrées bloquées)
+- `app/blocker.py` — dédup intra/inter-cas (scopée par device) + orchestration des générateurs
 - `app/generators/` — un module par marque de pare-feu
-- `app/ui/` — interface CustomTkinter
+- `app/ssh_client.py` — terminal SSH pré-rempli et push des commandes (paramiko), sans identifiants stockés
+- `app/ui/` — interface CustomTkinter (dont `devices_tab.py` et `ssh_dialogs.py`)
 - `app/logging_setup.py` — logging fichier + capture des exceptions non gérées
 - `tests/` — suite de tests pytest
 

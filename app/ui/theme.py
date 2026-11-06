@@ -3,6 +3,8 @@
 Verrouille l'appli en mode clair : ce style est pensé pour un fond clair (comme la quasi-totalité
 des dashboards SaaS) et n'a pas d'équivalent sombre défini.
 """
+from tkinter import ttk
+
 import customtkinter as ctk
 
 BG = "#f6f7fb"
@@ -117,3 +119,28 @@ def card(**overrides) -> dict:
     )
     kwargs.update(overrides)
     return kwargs
+
+
+_TREE_STYLE_INSTALLED = False
+
+
+def install_tree_style() -> None:
+    """Style ttk 'Tech Dashboard' partagé par tous les ttk.Treeview de l'appli (fond clair,
+    en-tête discret, pas de relief 3D). Idempotent : à appeler avant toute création de Treeview."""
+    global _TREE_STYLE_INSTALLED
+    if _TREE_STYLE_INSTALLED:
+        return
+    style = ttk.Style()
+    style.theme_use("default")
+    style.layout("Treeview", [("Treeview.treearea", {"sticky": "nswe"})])
+    style.configure(
+        "Treeview", background=SURFACE, fieldbackground=SURFACE, foreground=TEXT,
+        rowheight=30, font=(FONT_FAMILY, 10), borderwidth=0,
+    )
+    style.configure(
+        "Treeview.Heading", background=SURFACE_2, foreground=MUTED,
+        font=(FONT_FAMILY, 9, "bold"), relief="flat", borderwidth=0,
+    )
+    style.map("Treeview.Heading", background=[("active", SURFACE_2)])
+    style.map("Treeview", background=[("selected", "#e9edfd")], foreground=[("selected", TEXT)])
+    _TREE_STYLE_INSTALLED = True

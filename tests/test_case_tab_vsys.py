@@ -1,19 +1,11 @@
 """Tests de la bascule 'Multi-vsys' (Palo Alto) dans l'onglet Cas — instancie de vrais widgets
 CustomTkinter/Tk (pas de mock), cf. ui/case_tab.py. Nécessite un display (Xvfb en CI, cf. ci.yml).
 
-Un seul CTkToplevel racine partagé pour tout le module : CustomTkinter ne supporte correctement
-qu'une seule fenêtre Tk par processus (son suivi global du scaling/thème se corrompt si on recrée
-un `ctk.CTk()` complet à chaque test) — on recrée seulement le `CaseTab` entre les tests."""
-import customtkinter as ctk
+Réutilise la fenêtre Tk racine partagée de conftest.py (`root`, scope session) : CustomTkinter ne
+supporte correctement qu'une seule fenêtre Tk par processus — on recrée seulement le `CaseTab`
+entre les tests, jamais la racine."""
 import pytest
 from ui.case_tab import CaseTab
-
-
-@pytest.fixture(scope="module")
-def root():
-    r = ctk.CTk()
-    yield r
-    r.destroy()
 
 
 @pytest.fixture

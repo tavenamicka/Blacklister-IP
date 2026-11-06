@@ -13,47 +13,25 @@ from db import FIREWALL_LABELS
 from ui import theme
 from ui.import_dialog import ImportDialog
 
-COLUMNS = ("case", "firewall", "value", "type", "status", "created_at")
+COLUMNS = ("case", "firewall", "device", "value", "type", "status", "created_at")
 HEADERS = {
     "case": "Cas",
     "firewall": "Pare-feu",
+    "device": "Pôle / Device",
     "value": "Valeur",
     "type": "Type",
     "status": "Statut",
     "created_at": "Ajouté le",
 }
 
+
+def _device_label(entry: db.HistoryEntry) -> str:
+    if entry.device_name:
+        return f"{entry.device_name} ({entry.device_site})"
+    return "—"
+
 SEARCH_DEBOUNCE_MS = 300
 STATUS_FILTERS = {"Toutes": "all", "Actives": "active", "Débloquées": "archived"}
-
-_TREE_STYLE_INSTALLED = False
-
-
-def _install_tree_style() -> None:
-    """Style ttk 'Tech Dashboard' : fond clair, en-tête discret, pas de relief 3D."""
-    global _TREE_STYLE_INSTALLED
-    if _TREE_STYLE_INSTALLED:
-        return
-    style = ttk.Style()
-    style.theme_use("default")
-    style.layout("Treeview", [("Treeview.treearea", {"sticky": "nswe"})])
-    style.configure(
-        "Treeview", background=theme.SURFACE, fieldbackground=theme.SURFACE, foreground=theme.TEXT,
-        rowheight=30, font=(theme.FONT_FAMILY, 10), borderwidth=0,
-    )
-    style.configure(
-        "Treeview.Heading", background=theme.SURFACE_2, foreground=theme.MUTED,
-        font=(theme.FONT_FAMILY, 9, "bold"), relief="flat", borderwidth=0,
-    )
-    style.map(
-        "Treeview.Heading", background=[("active", theme.SURFACE_2)],
-    )
-    style.map(
-        "Treeview",
-        background=[("selected", "#e9edfd")],
-        foreground=[("selected", theme.TEXT)],
-    )
-    _TREE_STYLE_INSTALLED = True
 
 
 def _status_text(entry: db.HistoryEntry) -> str:
@@ -89,7 +67,7 @@ class StatTile(ctk.CTkFrame):
 class HistoryTab(ctk.CTkFrame):
     def __init__(self, master):
         super().__init__(master, fg_color="transparent")
-        _install_tree_style()
+        theme.install_tree_style()
         self._search_after_id = None
 
         stats = ctk.CTkFrame(self, fg_color="transparent")
@@ -173,6 +151,7 @@ class HistoryTab(ctk.CTkFrame):
                 values=(
                     entry.case_name,
                     FIREWALL_LABELS.get(entry.firewall, entry.firewall),
+                    _device_label(entry),
                     entry.value,
                     type_label,
                     _status_text(entry),
@@ -234,13 +213,14 @@ class HistoryTab(ctk.CTkFrame):
         entries = db.list_history(self.search_entry.get().strip(), status)
         with open(path, "w", newline="", encoding="utf-8-sig") as f:
             writer = csv.writer(f, delimiter=";")
-            writer.writerow(["Cas", "Pare-feu", "Valeur", "Type", "Statut", "Ajouté le"])
+            writer.writerow(["Cas", "Pare-feu", "Pôle / Device", "Valeur", "Type", "Statut", "Ajouté le"])
             for entry in entries:
                 type_label = "FQDN" if entry.is_fqdn else "IP"
                 writer.writerow(
                     [
                         _csv_safe(entry.case_name),
                         FIREWALL_LABELS.get(entry.firewall, entry.firewall),
+                        _csv_safe(_device_label(entry)),
                         entry.value,
                         type_label,
                         _status_text(entry),

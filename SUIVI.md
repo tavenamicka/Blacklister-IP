@@ -5,6 +5,36 @@
 
 ---
 
+Mise à jour : 2026-11-06 (**Registre de pare-feu physiques (multi-pôle/site) + accès SSH**, non
+commité. Besoin métier : plusieurs pare-feu dans plusieurs pôles (ex. Paris/Bordeaux) avec des
+conventions de nommage et des accès SSH propres à chacun (pas d'API possible sur ces équipements) —
+voir aussi `README.md`.
+- Nouvel onglet **Pare-feu** : registre `devices` (migration schéma **v3→v4**) — site/pôle, nom,
+  marque, host, port SSH, préfixes objets/groupe propres, vsys Palo Alto (stocké en JSON dans
+  `extra_options`). CRUD complet (`app/db.py`, `app/ui/devices_tab.py`).
+- Onglet **Cas** : la génération cible désormais des **devices précis** (cases à cocher groupées
+  par marque) plutôt qu'une simple marque — un device coché utilise ses préfixes/vsys propres ; si
+  aucun device n'est coché pour une marque, le mode générique historique reste disponible (bascule
+  d'onglet "Pare-feu"→"Cas" recharge le registre, cf. `MainWindow._on_tab_changed`).
+- Dédup/historique scopés **par device** et non plus seulement par marque (migration **v4→v5**,
+  `entries.device_id`, index actif `COALESCE(device_id, -1)`) : bloquer une IP à Paris n'empêche
+  plus de la bloquer à Bordeaux sur un pare-feu de même marque. Historique et export CSV affichent
+  le pôle/device de chaque entrée.
+- SSH (`app/ssh_client.py`, `app/ui/ssh_dialogs.py`) : **aucun identifiant stocké** — login/mot de
+  passe ressaisis à chaque connexion (seul le login est retenu en mémoire pour la durée de la
+  session, jamais écrit sur disque). Deux modes : "Terminal SSH" (lance un terminal local déjà
+  pointé host/port/login, mot de passe tapé par l'opérateur — ni vu ni stocké par l'appli) et
+  "Envoyer via SSH" (écran de confirmation montrant le device cible et les commandes exactes avant
+  tout envoi, puis push via un canal shell interactif `paramiko` et affichage de la sortie brute du
+  pare-feu — pas d'interprétation automatique du résultat, à l'opérateur de vérifier). Nouvelle
+  dépendance `paramiko` (`requirements.txt`).
+
+Vérifié à trois niveaux : suite pytest (71/71, paramiko/subprocess mockés pour `ssh_client` et le
+push SSH — aucune vraie connexion réseau dans les tests), lancement réel de l'app (pas d'exception
+dans `app.log`), et scénarios de bout en bout pilotant les vrais widgets CustomTkinter (création
+d'un device → bascule d'onglet → génération ciblant ce device → sauvegarde → historique montrant le
+pôle ; dialogue SSH avec push mocké). `ruff check` propre sur tous les fichiers touchés.)
+
 Mise à jour : 2026-09-11 (**CI/CD (Gitea Actions) mis en place**, commit `b3dc4f4` — job unique `test`
 (Python 3.12, `pip install -r requirements-dev.txt` puis `pytest -q`), même convention que les autres
 dépôts Python du homelab (cf. `INFRASTRUCTURE.md` §13). Pas de job de build de l'exécutable portable :

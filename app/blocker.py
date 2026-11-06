@@ -1,4 +1,5 @@
 """Logique métier : parsing, dédup (intra-cas / inter-cas), génération et sauvegarde."""
+import json
 from dataclasses import dataclass, field
 
 import db
@@ -16,6 +17,7 @@ GENERATORS: dict[str, Generator] = {
 @dataclass
 class FirewallResult:
     firewall: str
+    device: db.Device | None = None
     new_values: list[ParsedValue] = field(default_factory=list)
     duplicates_in_case: list[str] = field(default_factory=list)
     cross_case_warnings: list[tuple[str, str]] = field(default_factory=list)  # (valeur, autre_cas)
@@ -23,13 +25,37 @@ class FirewallResult:
     commands: str = ""
 
 
-def process(case: db.Case, firewall: str, raw_text: str, options: dict | None = None) -> FirewallResult:
-    result = FirewallResult(firewall=firewall)
+def _effective_prefixes(case: db.Case, device: db.Device | None) -> tuple[str, str]:
+    """Un device avec préfixe propre l'emporte sur celui du cas (sinon on retombe sur le cas,
+    comme avant l'introduction du registre de pare-feu)."""
+    object_prefix = device.object_prefix if device and device.object_prefix else case.prefix
+    group_prefix = device.group_prefix if device and device.group_prefix else case.group_prefix
+    return object_prefix, group_prefix
+
+
+def _device_options(device: db.Device | None) -> dict:
+    if not device or not device.extra_options:
+        return {}
+    try:
+        return json.loads(device.extra_options)
+    except json.JSONDecodeError:
+        return {}
+
+
+def process(
+    case: db.Case, firewall: str, raw_text: str, device: db.Device | None = None, options: dict | None = None,
+) -> FirewallResult:
+    """`device` : pare-feu physique précis (registre `devices`) ciblé par cette génération — fixe
+    les préfixes et options propres à ce device (ex. vsys Palo Alto) et scope la dédup à CE device
+    (deux sites de même marque ne se bloquent pas l'un l'autre). None = mode générique historique,
+    sans device (dédup au niveau de la marque, comme avant)."""
+    result = FirewallResult(firewall=firewall, device=device)
     parsed_list = parse_lines(raw_text)
+    device_id = device.id if device else None
 
     # Préchargement en 2 requêtes (au lieu d'aller-retours DB par ligne collée).
-    existing_in_case = db.existing_normalized_for_case(case.id, firewall)
-    other_case_by_normalized = db.normalized_case_map(firewall, exclude_case_id=case.id)
+    existing_in_case = db.existing_normalized_for_case(case.id, firewall, device_id)
+    other_case_by_normalized = db.normalized_case_map(firewall, exclude_case_id=case.id, device_id=device_id)
 
     seen_in_batch: set[str] = set()
     for parsed in parsed_list:
@@ -49,16 +75,18 @@ def process(case: db.Case, firewall: str, raw_text: str, options: dict | None = 
         seen_in_batch.add(key)
         result.new_values.append(parsed)
 
-    group_name = case.group_prefix
+    object_prefix, group_prefix = _effective_prefixes(case, device)
+    merged_options = {**_device_options(device), **(options or {})}
     if result.new_values:
-        result.commands = GENERATORS[firewall](case.prefix, group_name, result.new_values, **(options or {}))
+        result.commands = GENERATORS[firewall](object_prefix, group_prefix, result.new_values, **merged_options)
 
     return result
 
 
-def save(case: db.Case, firewall: str, values: list[ParsedValue]) -> None:
+def save(case: db.Case, firewall: str, values: list[ParsedValue], device: db.Device | None = None) -> None:
+    object_prefix, _ = _effective_prefixes(case, device)
     items = [
-        (parsed.raw.strip(), parsed.normalized, parsed.kind == "fqdn", object_name(case.prefix, parsed))
+        (parsed.raw.strip(), parsed.normalized, parsed.kind == "fqdn", object_name(object_prefix, parsed))
         for parsed in values
     ]
-    db.add_entries(case.id, firewall, items)
+    db.add_entries(case.id, firewall, items, device.id if device else None)

@@ -64,8 +64,11 @@ def test_migration_preserves_cases_and_entries_and_adds_unblocked_at(tmp_path, m
 
     with db.get_conn() as conn:
         version = conn.execute("SELECT version FROM schema_version").fetchone()["version"]
-        assert version == 3
+        assert version == 5
         cols = {r["name"] for r in conn.execute("PRAGMA table_info(entries)").fetchall()}
         assert "unblocked_at" in cols
+        assert "device_id" in cols
         case_cols = {r["name"] for r in conn.execute("PRAGMA table_info(cases)").fetchall()}
         assert "group_prefix" in case_cols
+        tables = {r["name"] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()}
+        assert "devices" in tables

@@ -3,6 +3,7 @@ import customtkinter as ctk
 
 from ui import theme
 from ui.case_tab import CaseTab
+from ui.devices_tab import DevicesTab
 from ui.history_tab import HistoryTab
 
 
@@ -16,6 +17,7 @@ class MainWindow(ctk.CTk):
 
         tabview = ctk.CTkTabview(
             self,
+            command=self._on_tab_changed,
             fg_color=theme.SURFACE,
             border_width=1,
             border_color=theme.BORDER,
@@ -29,14 +31,29 @@ class MainWindow(ctk.CTk):
             text_color=theme.TEXT,
             text_color_disabled=theme.MUTED,
         )
+        self.tabview = tabview
         tabview.pack(fill="both", expand=True, padx=16, pady=16)
         tab_cas = tabview.add("Cas")
         tab_historique = tabview.add("Historique")
+        tab_parefeu = tabview.add("Pare-feu")
         tab_cas.configure(fg_color=theme.BG)
         tab_historique.configure(fg_color=theme.BG)
+        tab_parefeu.configure(fg_color=theme.BG)
 
         self.history_tab = HistoryTab(tab_historique)
         self.history_tab.pack(fill="both", expand=True)
 
         self.case_tab = CaseTab(tab_cas, on_data_changed=self.history_tab.refresh)
         self.case_tab.pack(fill="both", expand=True)
+
+        self.devices_tab = DevicesTab(tab_parefeu)
+        self.devices_tab.pack(fill="both", expand=True)
+
+    def _on_tab_changed(self):
+        """Rafraîchit l'onglet qu'on vient d'afficher : le registre 'Pare-feu' peut avoir changé
+        depuis le dernier passage sur 'Cas' ou 'Historique'."""
+        current = self.tabview.get()
+        if current == "Cas":
+            self.case_tab.refresh_devices()
+        elif current == "Historique":
+            self.history_tab.refresh()
