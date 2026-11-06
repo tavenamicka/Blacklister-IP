@@ -18,7 +18,11 @@ Portable (un `.exe` + un dossier `data/`), aucune installation requise.
 
 Captures réalisées sur des données fictives (adresses de documentation RFC 5737, domaines `example.*`).
 
-![Génération des commandes de blocage, avec doublons et valeurs invalides signalés](docs/screenshots/generation-commandes.png)
+![Génération des commandes pour deux pare-feu Palo Alto distincts (Paris, Bordeaux), avec doublon, avertissement inter-cas et valeur invalide signalés](docs/screenshots/generation-commandes.png)
+
+![Registre des pare-feu physiques par pôle/site, avec host SSH et préfixes propres](docs/screenshots/registre-pare-feu.png)
+
+![Écran de confirmation avant envoi SSH : commandes exactes, device ciblé, identifiants jamais stockés](docs/screenshots/envoi-ssh.png)
 
 ![Historique des blocages : recherche, filtres, export CSV](docs/screenshots/historique.png)
 
@@ -67,6 +71,8 @@ Login et mot de passe sont ressaisis à chaque connexion et jamais écrits sur d
 ## Version / À propos
 
 La version affichée (bas de la fenêtre, cliquable) vient de `git describe --tags --always --dirty` : `vX.Y.Z` sur un commit tagué propre, `vX.Y.Z-dirty` s'il reste des modifications non commitées, `vX.Y.Z-N-g<hash>` si on est N commits après le dernier tag. Pour une version propre après un push, tagger le commit (`git tag -a vX.Y.Z -m "..."`, puis `git push origin vX.Y.Z`) avant de relancer `./build.ps1` — qui fige version + date de build dans l'exe au moment du build (`app/_build_info.py`, généré, non versionné). En dev (`python app/main.py`), la version est recalculée à la volée et la date de build affiche « non buildé ».
+
+![Écran « À propos » : version, date de build, auteur, contact](docs/screenshots/a-propos.png)
 
 ## Structure
 
