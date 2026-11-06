@@ -1,6 +1,7 @@
 """Dialogues SSH partagés par l'onglet Pare-feu (lancement terminal seul) et l'onglet Cas
 (lancement terminal + envoi des commandes générées) — cf. ssh_client.py."""
 import re
+import threading
 import tkinter.messagebox as messagebox
 
 import customtkinter as ctk
@@ -160,14 +161,28 @@ class SSHPushDialog(ctk.CTkToplevel):
 
         self.send_btn.configure(state="disabled", text="Envoi en cours...")
         self.status_label.configure(text="")
-        self.update()
+        # Push réseau dans un thread séparé : push_commands peut bloquer plusieurs secondes
+        # (timeout de connexion compris) et figerait sinon toute la fenêtre Tk pendant ce temps.
+        # Les widgets ne sont jamais touchés depuis ce thread, seulement depuis after() (thread UI).
+        threading.Thread(target=self._push, args=(login, password), daemon=True).start()
+
+    def _push(self, login: str, password: str) -> None:
         try:
             output = ssh_client.push_commands(self.device.host, self.device.ssh_port, login, password, self.commands)
         except ssh_client.SSHPushError as exc:
-            self.status_label.configure(text=str(exc), text_color=theme.DANGER)
-            self.send_btn.configure(state="normal", text="Envoyer")
+            self.after(0, self._on_push_error, str(exc))
             return
+        self.after(0, self._on_push_success, login, output)
 
+    def _on_push_error(self, message: str) -> None:
+        if not self.winfo_exists():
+            return
+        self.status_label.configure(text=message, text_color=theme.DANGER)
+        self.send_btn.configure(state="normal", text="Envoyer")
+
+    def _on_push_success(self, login: str, output: str) -> None:
+        if not self.winfo_exists():
+            return
         ssh_client.remember_login(login)
         self.status_label.configure(
             text="Commandes envoyées — vérifie la sortie ci-dessous avant de considérer le blocage effectif.",

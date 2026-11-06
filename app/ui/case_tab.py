@@ -11,10 +11,10 @@ from db import FIREWALL_LABELS, FIREWALLS
 
 from ui import theme
 from ui.ssh_dialogs import SSHPushDialog, open_terminal_flow
+from ui.vsys_widget import VsysSelector
 
 _SLUG_RE = re.compile(r"[^A-Za-z0-9]+")
 _PREFIX_RE = re.compile(r"^[A-Za-z0-9_.-]+$")
-_VSYS_NAME_RE = re.compile(r"^[A-Za-z0-9_.-]+$")
 
 
 def _default_prefix(name: str) -> str:
@@ -304,20 +304,7 @@ class CaseTab(ctk.CTkFrame):
         # Options vsys Palo Alto génériques : n'apparaissent que si "Palo Alto" est cochée et
         # qu'aucun device Palo Alto précis n'est sélectionné (son vsys vient alors du registre).
         # Objets et address-group doivent partager le même scope, cf. palo_alto.generate().
-        self.palo_vsys_frame = ctk.CTkFrame(self, fg_color="transparent")
-        self.palo_vsys_enabled_var = ctk.BooleanVar(value=False)
-        ctk.CTkCheckBox(
-            self.palo_vsys_frame, text="Multi-vsys", variable=self.palo_vsys_enabled_var,
-            command=self._update_palo_vsys_visibility, **theme.checkbox_style(),
-        ).pack(side="left", padx=(24, 8))
-        self.palo_vsys_mode_menu = ctk.CTkOptionMenu(
-            self.palo_vsys_frame, values=["shared", "vsys nommé"], command=self._on_palo_vsys_mode_changed,
-            width=130, **theme.option_menu_style(),
-        )
-        self.palo_vsys_mode_menu.pack(side="left")
-        self.palo_vsys_name_entry = ctk.CTkEntry(
-            self.palo_vsys_frame, placeholder_text="ex: vsys1", width=100, **theme.entry_style()
-        )
+        self.palo_vsys_frame = VsysSelector(self, checkbox_padx=(24, 8))
         self.refresh_devices()
         self._update_palo_vsys_visibility()
 
@@ -398,38 +385,30 @@ class CaseTab(ctk.CTkFrame):
             if self._devices_by_id.get(did) and self._devices_by_id[did].firewall == "palo_alto"
         )
 
+    # palo_vsys_enabled_var/mode_menu/name_entry : exposés pour compatibilité (tests + code
+    # existant qui pilotent directement les sous-widgets de VsysSelector).
+    @property
+    def palo_vsys_enabled_var(self) -> ctk.BooleanVar:
+        return self.palo_vsys_frame.enabled_var
+
+    @property
+    def palo_vsys_mode_menu(self) -> ctk.CTkOptionMenu:
+        return self.palo_vsys_frame.mode_menu
+
+    @property
+    def palo_vsys_name_entry(self) -> ctk.CTkEntry:
+        return self.palo_vsys_frame.name_entry
+
     def _update_palo_vsys_visibility(self):
         palo_selected = self.fw_vars["palo_alto"].get() and not self._any_palo_device_selected()
-        if palo_selected:
-            self.palo_vsys_frame.pack(fill="x", padx=16, after=self.devices_frame)
-        else:
-            self.palo_vsys_enabled_var.set(False)
-            self.palo_vsys_frame.pack_forget()
-        enabled = palo_selected and self.palo_vsys_enabled_var.get()
-        self.palo_vsys_mode_menu.configure(state="normal" if enabled else "disabled")
-        self._on_palo_vsys_mode_changed(self.palo_vsys_mode_menu.get() if enabled else "shared")
+        self.palo_vsys_frame.set_available(palo_selected, fill="x", padx=16, after=self.devices_frame)
 
     def _on_palo_vsys_mode_changed(self, mode: str):
-        palo_selected = self.fw_vars["palo_alto"].get() and not self._any_palo_device_selected()
-        enabled = palo_selected and self.palo_vsys_enabled_var.get()
-        if enabled and mode == "vsys nommé":
-            self.palo_vsys_name_entry.pack(side="left", padx=(8, 0))
-            self.palo_vsys_name_entry.configure(state="normal")
-        else:
-            self.palo_vsys_name_entry.pack_forget()
+        self.palo_vsys_frame.refresh(mode)
 
     def _palo_alto_vsys_value(self) -> str | None:
         """Scope PAN-OS à utiliser pour Palo Alto (None = pas de préfixe, mono-vsys)."""
-        if not self.palo_vsys_enabled_var.get():
-            return None
-        if self.palo_vsys_mode_menu.get() == "shared":
-            return "shared"
-        name = self.palo_vsys_name_entry.get().strip() or "vsys1"
-        if not _VSYS_NAME_RE.match(name):
-            raise ValueError(
-                "Nom de vsys invalide : lettres, chiffres, '_', '.', '-' uniquement (pas d'espace)."
-            )
-        return name
+        return self.palo_vsys_frame.get_value()
 
     def _new_case(self):
         dialog = CaseDialog(self)

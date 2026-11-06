@@ -117,6 +117,20 @@ def test_dedup_is_scoped_per_device_not_just_per_firewall(isolated_db):
     assert r3.duplicates_in_case == ["1.2.3.4"]
 
 
+def test_process_ignores_unsupported_extra_options_for_target_firewall(isolated_db):
+    """extra_options est un JSON libre par device (app/db.py) : une clé qui n'a de sens que pour
+    une autre marque (ex. 'vsys', propre à Palo Alto) ne doit pas faire planter un générateur qui
+    n'accepte pas **options (fortinet.generate n'a pas de **kwargs)."""
+    case = isolated_db.create_case("Test", "IOC-case-Test")
+    device = isolated_db.create_device(
+        "Paris", "FW-PAR", "fortinet", "10.1.0.1", extra_options='{"vsys": "shared"}',
+    )
+
+    result = blocker.process(case, "fortinet", "1.2.3.4", device=device)
+
+    assert "1.2.3.4" in result.commands
+
+
 def test_save_persists_device_id_and_history_shows_device(isolated_db):
     case = isolated_db.create_case("Test", "IOC-case-Test")
     device = isolated_db.create_device("Paris", "FW-PAR", "palo_alto", "10.1.0.1")

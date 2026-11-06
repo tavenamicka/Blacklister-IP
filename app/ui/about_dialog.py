@@ -9,7 +9,7 @@ class AboutDialog(ctk.CTkToplevel):
     def __init__(self, master):
         super().__init__(master, fg_color=theme.BG)
         self.title("À propos")
-        self.geometry("360x280")
+        self.geometry("360x320")
         self.resizable(False, False)
 
         ctk.CTkLabel(self, text=app_info.APP_NAME, text_color=theme.TEXT, font=theme.font_heading(18)).pack(
@@ -34,6 +34,13 @@ class AboutDialog(ctk.CTkToplevel):
         ctk.CTkLabel(
             self, text=app_info.COPYRIGHT, text_color=theme.MUTED, font=theme.font_body(11),
         ).pack(anchor="w", padx=20, pady=(16, 0))
+
+        ctk.CTkLabel(
+            self,
+            text="⚠ Base locale (data/blacklister.db) non chiffrée — lisible par quiconque a "
+            "accès au poste ou à l'exe portable.",
+            text_color=theme.WARNING, font=theme.font_body(11), wraplength=310, justify="left",
+        ).pack(anchor="w", padx=20, pady=(8, 0))
 
         ctk.CTkButton(self, text="Fermer", command=self.destroy, **theme.btn_secondary()).pack(
             padx=20, pady=20, side="bottom", anchor="e"

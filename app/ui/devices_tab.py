@@ -12,6 +12,7 @@ from db import FIREWALL_LABELS, FIREWALLS
 
 from ui import theme
 from ui.ssh_dialogs import open_terminal_flow
+from ui.vsys_widget import VsysSelector
 
 COLUMNS = ("site", "name", "firewall", "host", "port", "object_prefix", "group_prefix")
 HEADERS = {
@@ -25,7 +26,6 @@ HEADERS = {
 }
 
 _HOST_RE = re.compile(r"^\S+$")  # pas d'espace ; IP, FQDN ou nom court tous acceptés
-_VSYS_NAME_RE = re.compile(r"^[A-Za-z0-9_.-]+$")
 
 
 class DeviceDialog(ctk.CTkToplevel):
@@ -61,20 +61,7 @@ class DeviceDialog(ctk.CTkToplevel):
 
         # Options vsys : uniquement pertinentes pour Palo Alto (contexte PAN-OS), cf.
         # generators/palo_alto.generate(). Stockées dans devices.extra_options (JSON).
-        self.vsys_frame = ctk.CTkFrame(self, fg_color="transparent")
-        self.vsys_enabled_var = ctk.BooleanVar(value=False)
-        ctk.CTkCheckBox(
-            self.vsys_frame, text="Multi-vsys", variable=self.vsys_enabled_var,
-            command=self._update_vsys_visibility, **theme.checkbox_style(),
-        ).pack(side="left", padx=(16, 8))
-        self.vsys_mode_menu = ctk.CTkOptionMenu(
-            self.vsys_frame, values=["shared", "vsys nommé"], command=self._on_vsys_mode_changed,
-            width=130, **theme.option_menu_style(),
-        )
-        self.vsys_mode_menu.pack(side="left")
-        self.vsys_name_entry = ctk.CTkEntry(
-            self.vsys_frame, placeholder_text="ex: vsys1", width=100, **theme.entry_style()
-        )
+        self.vsys_frame = VsysSelector(self, checkbox_padx=(16, 8))
 
         host_row = ctk.CTkFrame(self, fg_color="transparent")
         host_row.pack(fill="x", padx=16, pady=(12, 0))
@@ -109,16 +96,8 @@ class DeviceDialog(ctk.CTkToplevel):
             self.port_entry.insert(0, str(device.ssh_port))
             self.object_prefix_entry.insert(0, device.object_prefix)
             self.group_prefix_entry.insert(0, device.group_prefix)
-            vsys = _device_vsys(device)
-            if vsys:
-                self.vsys_enabled_var.set(True)
-                if vsys == "shared":
-                    self.vsys_mode_menu.set("shared")
-                else:
-                    self.vsys_mode_menu.set("vsys nommé")
+            self.vsys_frame.set_value(_device_vsys(device))
         self._update_vsys_visibility()
-        if device and _device_vsys(device) not in (None, "shared"):
-            self.vsys_name_entry.insert(0, _device_vsys(device))
 
         self.error_label = ctk.CTkLabel(
             self, text="", text_color=theme.DANGER, font=theme.font_body(12), justify="left", wraplength=390
@@ -144,33 +123,13 @@ class DeviceDialog(ctk.CTkToplevel):
 
     def _update_vsys_visibility(self):
         is_palo = self._firewall_key() == "palo_alto"
-        if is_palo:
-            self.vsys_frame.pack(fill="x", pady=(4, 0), after=self.firewall_menu)
-        else:
-            self.vsys_enabled_var.set(False)
-            self.vsys_frame.pack_forget()
-        enabled = is_palo and self.vsys_enabled_var.get()
-        self.vsys_mode_menu.configure(state="normal" if enabled else "disabled")
-        self._on_vsys_mode_changed(self.vsys_mode_menu.get() if enabled else "shared")
-
-    def _on_vsys_mode_changed(self, mode: str):
-        enabled = self._firewall_key() == "palo_alto" and self.vsys_enabled_var.get()
-        if enabled and mode == "vsys nommé":
-            self.vsys_name_entry.pack(side="left", padx=(8, 0))
-            self.vsys_name_entry.configure(state="normal")
-        else:
-            self.vsys_name_entry.pack_forget()
+        self.vsys_frame.set_available(is_palo, fill="x", pady=(4, 0), after=self.firewall_menu)
 
     def _vsys_value(self) -> str | None:
         """Scope PAN-OS à stocker pour ce device (None = pas de préfixe, mono-vsys)."""
-        if self._firewall_key() != "palo_alto" or not self.vsys_enabled_var.get():
+        if self._firewall_key() != "palo_alto":
             return None
-        if self.vsys_mode_menu.get() == "shared":
-            return "shared"
-        name = self.vsys_name_entry.get().strip() or "vsys1"
-        if not _VSYS_NAME_RE.match(name):
-            raise ValueError("Nom de vsys invalide : lettres, chiffres, '_', '.', '-' uniquement (pas d'espace).")
-        return name
+        return self.vsys_frame.get_value()
 
     def _submit(self):
         site = self.site_entry.get().strip()

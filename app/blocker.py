@@ -1,4 +1,5 @@
 """Logique métier : parsing, dédup (intra-cas / inter-cas), génération et sauvegarde."""
+import inspect
 import json
 from dataclasses import dataclass, field
 
@@ -42,6 +43,16 @@ def _device_options(device: db.Device | None) -> dict:
         return {}
 
 
+def _filtered_options(firewall: str, options: dict) -> dict:
+    """Ne garde que les clés que GENERATORS[firewall] accepte réellement : extra_options d'un
+    device est un JSON libre (cf. app/db.py), rien ne garantit qu'il ne contient qu'une clé
+    pertinente pour la marque de ce device (ex. 'vsys' n'a de sens que pour Palo Alto) — sans ce
+    filtre, un générateur qui n'accepte pas **options (fortinet.generate, cisco_asa.generate)
+    lèverait un TypeError."""
+    accepted = set(inspect.signature(GENERATORS[firewall]).parameters) - {"prefix", "group_name", "values"}
+    return {k: v for k, v in options.items() if k in accepted}
+
+
 def process(
     case: db.Case, firewall: str, raw_text: str, device: db.Device | None = None, options: dict | None = None,
 ) -> FirewallResult:
@@ -76,7 +87,7 @@ def process(
         result.new_values.append(parsed)
 
     object_prefix, group_prefix = _effective_prefixes(case, device)
-    merged_options = {**_device_options(device), **(options or {})}
+    merged_options = _filtered_options(firewall, {**_device_options(device), **(options or {})})
     if result.new_values:
         result.commands = GENERATORS[firewall](object_prefix, group_prefix, result.new_values, **merged_options)
 
