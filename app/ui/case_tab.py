@@ -298,7 +298,7 @@ class CaseTab(ctk.CTkFrame):
         # Devices précis (registre "Pare-feu"), par marque — un cas peut cibler Paris ET Bordeaux
         # séparément. Si aucun device n'est coché pour une marque, on retombe sur le mode générique
         # historique (une seule génération pour la marque, sans device précis).
-        self.devices_frame = ctk.CTkFrame(self, fg_color="transparent")
+        self.devices_frame = ctk.CTkFrame(self, fg_color="transparent", height=1)
         self.devices_frame.pack(fill="x", padx=16, pady=(0, 2), after=fw_frame)
 
         # Options vsys Palo Alto génériques : n'apparaissent que si "Palo Alto" est cochée et
