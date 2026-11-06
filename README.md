@@ -14,6 +14,14 @@ Pour qui gère plusieurs pare-feu répartis sur plusieurs pôles/sites (ex. Pari
 
 Portable (un `.exe` + un dossier `data/`), aucune installation requise.
 
+## Aperçu
+
+Captures réalisées sur des données fictives (adresses de documentation RFC 5737, domaines `example.*`).
+
+![Génération des commandes de blocage, avec doublons et valeurs invalides signalés](docs/screenshots/generation-commandes.png)
+
+![Historique des blocages : recherche, filtres, export CSV](docs/screenshots/historique.png)
+
 ## Utilisation (développement)
 
 ```bash
